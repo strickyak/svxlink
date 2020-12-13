@@ -153,6 +153,9 @@ class SquelchVox : public Squelch
     double  sum;
     double  up_thresh;
     double  down_thresh;
+    int     num_peaks;
+    int     required_peaks;
+    double  peak_thresh;
 
 };  /* class SquelchVox */
 

@@ -116,7 +116,8 @@ using namespace Async;
 
 
 SquelchVox::SquelchVox(void)
-  : buf(0), buf_size(0), head(0), sum(0), up_thresh(0), down_thresh(0)
+  : buf(0), buf_size(0), head(0), sum(0), up_thresh(0), down_thresh(0),
+    num_peaks(0), required_peaks(0), peak_thresh(0)
 {
 } /* SquelchVox::SquelchVox */
 
@@ -143,6 +144,10 @@ bool SquelchVox::initialize(Config& cfg, const string& rx_name)
     return false;
   }
   buf_size = INTERNAL_SAMPLE_RATE * atoi(value.c_str()) / 1000;
+
+  /* This works with VOX_FILTER_DEPTH = 200, VOX_THRESH = 200. */
+  required_peaks = buf_size / 10;
+
   buf = new float[buf_size];
   for (int i=0; i<buf_size; ++i)
   {
@@ -182,6 +187,7 @@ void SquelchVox::setVoxThreshold(short thresh)
 {
   up_thresh = pow(thresh / 10000.0, 2) * buf_size;
   down_thresh = pow(thresh / 10000.0, 2) * buf_size;
+  peak_thresh = 1.0 * up_thresh / buf_size;
 } /* SquelchVox::setVoxThreshold */
 
 
@@ -193,6 +199,7 @@ void SquelchVox::reset(void)
   }
   sum = 0;
   head = 0;
+  num_peaks = 0;
   Squelch::reset();
 } /* SquelchVox::reset */
 
@@ -215,18 +222,24 @@ int SquelchVox::processSamples(const float *samples, int count)
   for (int i=start_pos; i<count; ++i)
   {
     sum -= buf[head];
+    if (buf[head] > peak_thresh) {
+      --num_peaks;
+    }
     buf[head] = samples[i] * samples[i];
     sum += buf[head];
+    if (buf[head] > peak_thresh) {
+      ++num_peaks;
+    }
     head = (head >= buf_size-1) ? 0 : head + 1;
   }
 
   if (signalDetected())
   {
-    setSignalDetected(sum >= up_thresh);
+    setSignalDetected(sum >= up_thresh && num_peaks >= required_peaks);
   }
   else
   {
-    setSignalDetected(sum >= down_thresh);
+    setSignalDetected(sum >= down_thresh && num_peaks >= required_peaks);
   }
 
   return count;
